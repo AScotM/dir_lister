@@ -26,13 +26,33 @@ def list_files_and_directories(path):
             # Get the last modification time
             modification_time = datetime.fromtimestamp(item_stat.st_mtime).strftime('%b %d %H:%M')
 
-            # Determine if it's a file or directory
-            item_type = 'd' if stat.S_ISDIR(item_stat.st_mode) else '-'
+            # Determine the type of the item
+            if stat.S_ISDIR(item_stat.st_mode):
+                item_type = 'dir_'  # Directory
+            elif stat.S_ISREG(item_stat.st_mode):
+                item_type = '-'     # Regular file
+            elif stat.S_ISLNK(item_stat.st_mode):
+                item_type = 'link_' # Symbolic link
+            elif stat.S_ISFIFO(item_stat.st_mode):
+                item_type = 'pipe_' # FIFO (named pipe)
+            elif stat.S_ISSOCK(item_stat.st_mode):
+                item_type = 'sock_' # Socket
+            elif stat.S_ISCHR(item_stat.st_mode):
+                item_type = 'char_' # Character device
+            elif stat.S_ISBLK(item_stat.st_mode):
+                item_type = 'block_'# Block device
+            else:
+                item_type = '?'     # Unknown type
 
+            # Print the formatted output
             print(f"{GREEN}{item_type}{os.path.basename(item_path):<20} {size_str:<10} {modification_time}{RESET}")
 
-    except PermissionError:
-        print("User has no permission to list full contents of directory.")
+    except PermissionError as e:
+        print(f"PermissionError: {e}")
+    except FileNotFoundError as e:
+        print(f"FileNotFoundError: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
 
 def get_os_info():
     os_info = platform.platform()
@@ -40,10 +60,24 @@ def get_os_info():
 
 def get_filesystem_type(path):
     try:
-        df_output = subprocess.check_output(['df', '--output=fstype', path]).decode('utf-8')
-        filesystem_type = df_output.split('\n')[1].strip()
-        return filesystem_type
+        if platform.system() == 'Windows':
+            # Windows-specific method for determining the filesystem type
+            drive = os.path.splitdrive(path)[0]
+            result = subprocess.check_output(f"fsutil fsinfo volumeinfo {drive}").decode('utf-8')
+            # Extract filesystem type from the result
+            for line in result.splitlines():
+                if "File System Type" in line:
+                    return line.split(":")[1].strip()
+            return "Unknown"
+        else:
+            # Linux/macOS method
+            df_output = subprocess.check_output(['df', '--output=fstype', path]).decode('utf-8')
+            filesystem_type = df_output.split('\n')[1].strip()
+            return filesystem_type
     except subprocess.CalledProcessError:
+        return "Unknown"
+    except Exception as e:
+        print(f"Error getting filesystem type: {e}")
         return "Unknown"
 
 if __name__ == "__main__":
@@ -54,4 +88,3 @@ if __name__ == "__main__":
     print(f"Operating System: {os_info}")
     print(f"Filesystem Type: {filesystem_type}")
     list_files_and_directories(directory_path)
-
