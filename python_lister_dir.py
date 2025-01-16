@@ -8,20 +8,47 @@ from datetime import datetime
 GREEN = "\033[32m"
 RESET = "\033[0m"
 
-def list_files_and_directories(path):
+# Human-readable size formatting
+def human_readable_size(size):
+    """Convert a file size into a human-readable format."""
+    for unit in ['', 'KB', 'MB', 'GB', 'TB']:
+        if size < 1024:
+            return f"{size:.1f}{unit}"
+        size /= 1024
+    return f"{size:.1f}PB"
+
+# File permissions formatting
+def file_permissions(mode):
+    """Convert file mode to a human-readable string (e.g., 'rwxr-xr-x')."""
+    is_dir = "d" if stat.S_ISDIR(mode) else "-"
+    perm = ''.join([
+        "r" if mode & stat.S_IRUSR else "-",
+        "w" if mode & stat.S_IWUSR else "-",
+        "x" if mode & stat.S_IXUSR else "-",
+        "r" if mode & stat.S_IRGRP else "-",
+        "w" if mode & stat.S_IWGRP else "-",
+        "x" if mode & stat.S_IXGRP else "-",
+        "r" if mode & stat.S_IROTH else "-",
+        "w" if mode & stat.S_IWOTH else "-",
+        "x" if mode & stat.S_IXOTH else "-"
+    ])
+    return is_dir + perm
+
+def list_files_and_directories(path, sort_by="name"):
     try:
-        for item in os.listdir(path):
+        items = [(item, os.stat(os.path.join(path, item))) for item in os.listdir(path)]
+        if sort_by == "size":
+            items.sort(key=lambda x: x[1].st_size)
+        elif sort_by == "time":
+            items.sort(key=lambda x: x[1].st_mtime, reverse=True)
+        else:
+            items.sort(key=lambda x: x[0].lower())
+
+        for item, item_stat in items:
             item_path = os.path.join(path, item)
-            item_stat = os.stat(item_path)
 
             # Get the file size in a human-readable format
-            size = item_stat.st_size
-            if size < 1024:
-                size_str = f"{size}B"
-            elif size < 1024 * 1024:
-                size_str = f"{size / 1024:.1f}KB"
-            else:
-                size_str = f"{size / (1024 * 1024):.1f}MB"
+            size_str = human_readable_size(item_stat.st_size)
 
             # Get the last modification time
             modification_time = datetime.fromtimestamp(item_stat.st_mtime).strftime('%b %d %H:%M')
@@ -44,8 +71,11 @@ def list_files_and_directories(path):
             else:
                 item_type = '?'     # Unknown type
 
+            # Get file permissions
+            permissions = file_permissions(item_stat.st_mode)
+
             # Print the formatted output
-            print(f"{GREEN}{item_type}{os.path.basename(item_path):<20} {size_str:<10} {modification_time}{RESET}")
+            print(f"{GREEN}{permissions:<10}{item_type}{os.path.basename(item_path):<20} {size_str:<10} {modification_time}{RESET}")
 
     except PermissionError as e:
         print(f"PermissionError: {e}")
